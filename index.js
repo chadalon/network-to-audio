@@ -5,7 +5,7 @@ const path = require('path');
 const sampleRate = 44100;
 const numChannels = 1;
 const bitsPerSample = 16;
-const totalSeconds = 30;
+const totalSeconds = 6;
 const absoluteMax = 2 ** (bitsPerSample - 1) - 1;
 
 const riffChunkStruct = C.Struct("riffChunk")
@@ -76,6 +76,10 @@ function generateWave(waveType, pitch, volume, offset = 0) {
   function sineFunction(xStep) {
     return Math.round(Math.sin(xStep / sinePer) * maxVol);
   }
+  function noiseFunction(xStep) {
+    let v = Math.floor((Math.random() * (maxVol + 1 - minVol) + minVol) * volume);
+    return v;
+  }
   for (let i = 0; i < Math.floor(totalSeconds * sampleRate); i++) {
     let x = Math.round(waveChunkLength * i) / Math.round(waveChunkLength) % Math.round(waveChunkLength) + offset;
     let y = 0;
@@ -83,6 +87,7 @@ function generateWave(waveType, pitch, volume, offset = 0) {
     // other loop  here if u gonna do that
     if (waveType === "saw") y += sawFunction(x);
     else if (waveType === "sine") y += sineFunction(x);
+    else if (waveType === "noise") y += noiseFunction(x);
 
     soundDat[i] = y;
   }
@@ -96,7 +101,8 @@ function addWavesToFirst(dat1, dat2) {
     else if (dat1[i] < - absoluteMax - 1) dat1[i] = -absoluteMax - 1;
   });
 }
-const soundData = generateWave("saw", 440, .5);
+// const soundData = generateWave("saw", 440, .5);
+const soundData = generateWave("noise", 440, .5);
 addWavesToFirst(soundData, generateWave("sine", 220, .5, 50))
 dataSubChunkStruct.get("data").set(soundData);
 dataSubChunkStruct
