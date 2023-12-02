@@ -1,10 +1,11 @@
 const C = require("construct-js");
 const fs = require("fs");
 const path = require('path');
+const {PythonShell} = require('python-shell');
 
-const sampleRate = 44100;
+const sampleRate = 44100; //44100 standard
 const numChannels = 1;
-const bitsPerSample = 16;
+const bitsPerSample = 16; // TODO make this not hardcoded in. also would have to change U16 - probs diff library or code it yourself
 const totalSeconds = 6;
 const absoluteMax = 2 ** (bitsPerSample - 1) - 1;
 
@@ -36,33 +37,21 @@ const dataSubChunkStruct = C.Struct("dataSubChunk")
   .field("size", C.U32(0, C.Endian.Little)) // we dont know yet
   .field("data", C.I16s([0], C.Endian.Little));
 
-// var soundData = [];
-// let isUp = true;
-// let sampleValue = -16383;
-// let step = Math.floor(16383 * 2 / 100);
-// for (let i = 0; i < Math.floor(totalSeconds * sampleRate); i++) {
-// //   if (i % 50 === 0) {
-// //     isUp = !isUp;
-// //   }
-// //   const sampleValue = isUp ? 16383 : -16383; // i think max is 32,... from 16-bit bitrate (signed)
-//     if (i % 100 === 0)
-//     {
-//         sampleValue = -16383;
-//     }
-//     else
-//     {
-//         sampleValue += step;
-//     }
-//   soundData[i] = sampleValue;
-// }
+function getMaxVol(volume) {
+    return Math.trunc((2 ** (bitsPerSample - 1) - 1) * volume); // should i minus 1 here?
+}
+function getMinVol(volume) {
+    return -Math.trunc((2 ** (bitsPerSample - 1)) * volume);
+}
+
 function generateWave(waveType, pitch, volume, offset = 0) {
   /**
    * @param {Number} volume 0 to 1
    */
   const soundDat = [];
   // start with it low
-  let maxVol = Math.trunc((2 ** (bitsPerSample - 1) - 1) * volume); // should i minus 1 here?
-  let minVol = -Math.trunc((2 ** (bitsPerSample - 1)) * volume);
+  let maxVol = getMaxVol(volume);
+  let minVol = getMinVol(volume);
   console.log(maxVol)
   let waveChunkLength = sampleRate / pitch;
   let yStep = 2 * maxVol / waveChunkLength;
@@ -102,16 +91,50 @@ function addWavesToFirst(dat1, dat2) {
   });
 }
 // const soundData = generateWave("saw", 440, .5);
-const soundData = generateWave("noise", 440, .5);
-addWavesToFirst(soundData, generateWave("sine", 220, .5, 50))
-dataSubChunkStruct.get("data").set(soundData);
-dataSubChunkStruct
-  .get("size")
-  .set((soundData.length * numChannels * bitsPerSample) / 8);
+// const soundData = generateWave("noise", 440, .5);
+// addWavesToFirst(soundData, generateWave("sine", 220, .5, 50))
+let pyshell = new PythonShell("sniffer-test.py");
+let soundDat = [];
+pyshell.on("message", function(message) {
+    if (soundDat.length > 500000) return;
+    for (let i = 0; i < 100; i++)
+    soundDat = soundDat.concat(basicBinaryConversion(message, .5));
+    console.log(soundDat);
+});
+pyshell.end(function(err) {
+    if (err) {
+        throw err;
+    }
+    finalizeWav(soundDat);
+})
 
-const fileStruct = C.Struct("waveFile")
-  .field("riffChunk", riffChunkStruct)
-  .field("fmtSubChunk", fmtSubChunkStruct)
-  .field("dataSubChunk", dataSubChunkStruct);
+function finalizeWav(soundDat) {
+    dataSubChunkStruct.get("data").set(soundDat);
+    dataSubChunkStruct
+    .get("size")
+    .set((soundDat.length * numChannels * bitsPerSample) / 8);
 
-fs.writeFileSync(path.join(__dirname, './new.wav'), fileStruct.toUint8Array());
+    const fileStruct = C.Struct("waveFile")
+    .field("riffChunk", riffChunkStruct)
+    .field("fmtSubChunk", fmtSubChunkStruct)
+    .field("dataSubChunk", dataSubChunkStruct);
+
+
+
+    fs.writeFileSync(path.join(__dirname, './new.wav'), fileStruct.toUint8Array());
+}
+
+function basicBinaryConversion(dat, volume) {
+    let soundDat = [];
+    let maxVol = getMaxVol(volume);
+    let minVol = getMinVol(volume);
+    for (const bit of dat) {
+        if (bit === "0") {
+            soundDat.push(minVol);
+        }
+        else {
+            soundDat.push(maxVol);
+        }
+    }
+    return soundDat;
+}
