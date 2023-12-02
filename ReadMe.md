@@ -4,6 +4,8 @@
 Bc we could all use some new Serum wavetables amirite?
 This thing converts network packets into audio (and has the option to alter the data via bit- or byte- stuffing to make it more realistic)
 
+Currently it simply reads a pcapng file (I have provided a sample one) which was pre-captured.
+
 ## Get set up
 1. You need node.js installed. After that, just run "npm install" and it should install the node dependencies.
 2. You need python3 installed. Now run "pip install scapy"
